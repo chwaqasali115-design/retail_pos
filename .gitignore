@@ -1,0 +1,14 @@
+
+/vendor/
+/node_modules/
+/public/storage
+/storage/*.key
+.env
+.env.backup
+.phpunit.result.cache
+docker-compose.override.yml
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db

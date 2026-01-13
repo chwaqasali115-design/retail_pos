@@ -1,0 +1,13 @@
+.git
+.dockerignore
+Dockerfile
+deploy.ps1
+README.md
+*.log
+tmp/
+vendor/
+.gemini/
+brain/
+implementation_plan.md
+task.md
+walkthrough.md
