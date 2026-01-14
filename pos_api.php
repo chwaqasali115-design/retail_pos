@@ -33,8 +33,9 @@ if ($action === 'search') {
         $q = $_GET['q'] ?? '';
         $cid = $_SESSION['company_id'] ?? 1;
         // Optimized search to include stock qty
-        $stmt = $conn->prepare("SELECT id, name, price, cost_price, tax_id, tax_rate, sku, barcode, is_tax_inclusive, stock_quantity FROM products WHERE (name LIKE :q OR sku LIKE :q OR barcode LIKE :q) AND company_id = :cid LIMIT 20");
-        $stmt->execute([':q' => "%$q%", ':cid' => $cid]);
+        $searchTerm = "%$q%";
+        $stmt = $conn->prepare("SELECT id, name, price, cost_price, tax_id, tax_rate, sku, barcode, is_tax_inclusive, stock_quantity FROM products WHERE (name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND company_id = ? LIMIT 20");
+        $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $cid]);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode($results);
     } catch (Exception $e) {
