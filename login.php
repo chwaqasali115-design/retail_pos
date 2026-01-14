@@ -5,9 +5,16 @@ require_once 'core/Auth.php';
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $auth = new Auth();
-    if ($auth->login($_POST['username'], $_POST['password'])) {
+    $loginStatus = $auth->login($_POST['username'], $_POST['password']);
+
+    if ($loginStatus === 'SUCCESS') {
         header("Location: index.php");
         exit;
+    } elseif ($loginStatus === 'MULTI_ORG') {
+        header("Location: select_organization.php");
+        exit;
+    } elseif ($loginStatus === 'NO_ORG') {
+        $error = "No active organization assigned to your account.";
     } else {
         $error = "Invalid username or password";
     }

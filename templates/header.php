@@ -87,7 +87,7 @@
                     <?php endif; ?>
 
                     <!-- Procurement Module with Submenu -->
-                    <?php if (PermissionService::hasPermission('purchases.orders.view')): ?>
+                    <?php if (PermissionService::hasPermission('purchases.order.view')): ?>
                         <a class="nav-link" data-bs-toggle="collapse" href="#procurementMenu" role="button"
                             aria-expanded="false" aria-controls="procurementMenu">
                             <i class="fas fa-truck-loading me-2"></i> Procurement
@@ -95,12 +95,12 @@
                         <div class="collapse submenu" id="procurementMenu">
                             <a href="purchases.php" class="nav-link"><i class="fas fa-tachometer-alt me-2"></i> Purchase
                                 Overview</a>
-                            <?php if (PermissionService::hasPermission('purchases.orders.create')): ?>
+                            <?php if (PermissionService::hasPermission('purchases.order.create')): ?>
                                 <a href="purchase_create.php" class="nav-link"><i class="fas fa-plus me-2"></i> New Purchase
                                     Order</a>
                             <?php endif; ?>
                             <a href="vendors.php" class="nav-link"><i class="fas fa-store me-2"></i> All Vendors</a>
-                            <?php if (PermissionService::hasPermission('purchases.vendors.create')): ?>
+                            <?php if (PermissionService::hasPermission('purchases.vendor_invoice.create')): ?>
                                 <a href="vendor_create.php" class="nav-link"><i class="fas fa-user-plus me-2"></i> Add Vendor</a>
                             <?php endif; ?>
                         </div>
@@ -181,8 +181,20 @@
                     <button class="btn btn-primary" id="menu-toggle"><i class="fas fa-bars"></i></button>
                     <div class="collapse navbar-collapse" id="navbarSupportedContent">
                         <ul class="navbar-nav ms-auto mt-2 mt-lg-0">
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle fw-bold text-primary" href="#" id="orgDropdown"
+                                    role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-building me-1"></i>
+                                    <?php echo htmlspecialchars($_SESSION['company_name'] ?? 'Organization'); ?>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="orgDropdown">
+                                    <li><a class="dropdown-item" href="select_organization.php"><i
+                                                class="fas fa-exchange-alt me-2"></i> Switch Organization</a></li>
+                                </ul>
+                            </li>
                             <li class="nav-item">
-                                <span class="nav-link fw-bold"><?php echo $_SESSION['username'] ?? 'User'; ?></span>
+                                <span
+                                    class="nav-link fw-bold"><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></span>
                             </li>
                         </ul>
                     </div>

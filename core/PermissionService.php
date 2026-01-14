@@ -17,11 +17,12 @@ class PermissionService
      * Load permissions for a user into the session
      * @param int $userId
      * @param int $roleId
+     * @param int $companyId
      */
-    public function loadUserPermissions($userId, $roleId)
+    public function loadUserPermissions($userId, $roleId, $companyId)
     {
-        // SUPER ADMIN CHECK: Role ID 1 is Admin
-        if ($roleId == 1) {
+        // SUPER ADMIN CHECK: Role ID 1 is Admin, OR user has is_super_admin flag
+        if ($roleId == 1 || (isset($_SESSION['is_super_admin']) && $_SESSION['is_super_admin'] == 1)) {
             $_SESSION['permissions'] = ['SUPER_ADMIN'];
             return;
         }
@@ -37,15 +38,16 @@ class PermissionService
         $stmt->execute();
         $permissions = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        // 2. Apply User Overrides
+        // 2. Apply User Overrides (Scoped to Company)
         // We need to fetch overrides: if is_allowed = 1, add it; if 0, remove it.
         $queryOverride = "SELECT p.slug, up.is_allowed 
                           FROM user_permissions up
                           JOIN permissions p ON up.permission_id = p.id
-                          WHERE up.user_id = :userId";
+                          WHERE up.user_id = :userId AND up.company_id = :companyId";
 
         $stmtOverride = $this->db->prepare($queryOverride);
         $stmtOverride->bindParam(":userId", $userId);
+        $stmtOverride->bindParam(":companyId", $companyId);
         $stmtOverride->execute();
         $overrides = $stmtOverride->fetchAll(PDO::FETCH_ASSOC);
 
@@ -73,11 +75,16 @@ class PermissionService
      */
     public static function hasPermission($slug)
     {
+        // Global Super Admin Bypass
+        if (isset($_SESSION['is_super_admin']) && $_SESSION['is_super_admin'] == 1) {
+            return true;
+        }
+
         if (!isset($_SESSION['permissions'])) {
             return false;
         }
 
-        // Super Admin Bypass
+        // Intra-Org Super Admin
         if (in_array('SUPER_ADMIN', $_SESSION['permissions'])) {
             return true;
         }
@@ -150,12 +157,12 @@ class PermissionService
     }
 
     /**
-     * Get permission overrides for a specific user
+     * Get permission overrides for a specific user and company
      */
-    public function getUserOverrides($userId)
+    public function getUserOverrides($userId, $companyId)
     {
-        $stmt = $this->db->prepare("SELECT permission_id, is_allowed FROM user_permissions WHERE user_id = ?");
-        $stmt->execute([$userId]);
+        $stmt = $this->db->prepare("SELECT permission_id, is_allowed FROM user_permissions WHERE user_id = ? AND company_id = ?");
+        $stmt->execute([$userId, $companyId]);
         return $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // returns [permission_id => is_allowed]
     }
 
@@ -196,20 +203,21 @@ class PermissionService
     /**
      * Save User Overrides
      * @param int $userId
+     * @param int $companyId
      * @param array $overrides format: [[permission_id, is_allowed], ...]
      */
-    public function saveUserOverrides($userId, $overrides)
+    public function saveUserOverrides($userId, $companyId, $overrides)
     {
         $this->db->beginTransaction();
         try {
-            // Clear existing
-            $stmt = $this->db->prepare("DELETE FROM user_permissions WHERE user_id = ?");
-            $stmt->execute([$userId]);
+            // Clear existing for this company
+            $stmt = $this->db->prepare("DELETE FROM user_permissions WHERE user_id = ? AND company_id = ?");
+            $stmt->execute([$userId, $companyId]);
 
             // Insert new
-            $stmtInsert = $this->db->prepare("INSERT INTO user_permissions (user_id, permission_id, is_allowed) VALUES (?, ?, ?)");
+            $stmtInsert = $this->db->prepare("INSERT INTO user_permissions (user_id, permission_id, company_id, is_allowed) VALUES (?, ?, ?, ?)");
             foreach ($overrides as $ov) {
-                $stmtInsert->execute([$userId, $ov['permission_id'], $ov['is_allowed']]);
+                $stmtInsert->execute([$userId, $ov['permission_id'], $companyId, $ov['is_allowed']]);
             }
             $this->db->commit();
             return true;

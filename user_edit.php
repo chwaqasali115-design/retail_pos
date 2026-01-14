@@ -20,7 +20,12 @@ if (!isset($_GET['id'])) {
 $user_id = $_GET['id'];
 
 // Fetch User
-$stmt = $conn->prepare("SELECT * FROM users WHERE id = ? AND company_id = ?");
+$query = "SELECT u.id, u.username, u.email, u.phone,
+                 ou.role_id, ou.company_id, ou.store_id, ou.terminal_id, ou.is_active
+          FROM users u
+          JOIN organization_users ou ON u.id = ou.user_id
+          WHERE u.id = ? AND ou.company_id = ?";
+$stmt = $conn->prepare($query);
 $stmt->execute(array($user_id, $_SESSION['company_id']));
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -56,37 +61,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_user'])) {
     } elseif ($username == '' || $email == '') {
         $error = "Username and email are required.";
     } else {
-        // Check if username or email exists (excluding current user)
-        $stmt = $conn->prepare("SELECT id FROM users WHERE (username = ? OR email = ?) AND company_id = ? AND id != ?");
-        $stmt->execute(array($username, $email, $_SESSION['company_id'], $user_id));
+        // Check Global Uniqueness for Username/Email (excluding current user)
+        $stmt = $conn->prepare("SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?");
+        $stmt->execute(array($username, $email, $user_id));
         
         if ($stmt->fetch()) {
             $error = "Username or email already exists.";
         } else {
             try {
+                $conn->beginTransaction();
+
+                // 1. Update Core User Data
                 if ($password != '') {
-                    // Update with new password
                     if (strlen($password) < 6) {
-                        $error = "Password must be at least 6 characters.";
-                    } else {
-                        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, password_hash = ?, role_id = ?, store_id = ?, terminal_id = ?, phone = ?, is_active = ? WHERE id = ? AND company_id = ?");
-                        $stmt->execute(array($username, $email, $hashedPassword, $role_id, $store_id, $terminal_id, $phone, $is_active, $user_id, $_SESSION['company_id']));
-                        $message = "User updated successfully with new password!";
+                        throw new Exception("Password must be at least 6 characters.");
                     }
+                    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                    $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, password_hash = ?, phone = ? WHERE id = ?");
+                    $stmt->execute(array($username, $email, $hashedPassword, $phone, $user_id));
+                    $message = "User updated successfully with new password!";
                 } else {
-                    // Update without password
-                    $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, role_id = ?, store_id = ?, terminal_id = ?, phone = ?, is_active = ? WHERE id = ? AND company_id = ?");
-                    $stmt->execute(array($username, $email, $role_id, $store_id, $terminal_id, $phone, $is_active, $user_id, $_SESSION['company_id']));
+                    $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, phone = ? WHERE id = ?");
+                    $stmt->execute(array($username, $email, $phone, $user_id));
                     $message = "User updated successfully!";
                 }
+
+                // 2. Update Organization Mapping
+                $stmtOrg = $conn->prepare("UPDATE organization_users SET role_id = ?, store_id = ?, terminal_id = ?, is_active = ? WHERE user_id = ? AND company_id = ?");
+                $stmtOrg->execute(array($role_id, $store_id, $terminal_id, $is_active, $user_id, $_SESSION['company_id']));
+
+                $conn->commit();
                 
                 // Refresh user data
-                $stmt = $conn->prepare("SELECT * FROM users WHERE id = ? AND company_id = ?");
+                $stmt = $conn->prepare($query);
                 $stmt->execute(array($user_id, $_SESSION['company_id']));
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-            } catch (PDOException $e) {
+            } catch (Exception $e) {
+                $conn->rollBack();
                 $error = "Error updating user: " . $e->getMessage();
             }
         }

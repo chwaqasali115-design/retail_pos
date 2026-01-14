@@ -100,14 +100,22 @@ require_once 'templates/header.php';
 
 <div class="container-fluid mt-4">
     <div class="row">
-        <div class="col-md-12 mb-4">
-            <h2 class="fw-bold">Organization Setup</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="#">Organization</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Company Profile</li>
-                </ol>
-            </nav>
+        <div class="col-md-12 mb-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold">Organization Setup</h2>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="#">Organization</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Company Profile</li>
+                    </ol>
+                </nav>
+            </div>
+            
+            <?php if (PermissionService::hasPermission('org_setup.org_management.create') || (isset($_SESSION['is_super_admin']) && $_SESSION['is_super_admin'])): ?>
+                <a href="org_create.php" class="btn btn-outline-primary">
+                    <i class="fas fa-plus-circle me-2"></i>New Organization
+                </a>
+            <?php endif; ?>
         </div>
     </div>
 

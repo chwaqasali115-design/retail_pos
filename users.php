@@ -9,25 +9,27 @@ $conn = $db->getConnection();
 $message = '';
 $error = '';
 
-// Handle Delete User
+// Handle Remove User from Org
 if (isset($_GET['delete'])) {
     $user_id = $_GET['delete'];
 
-    // Check Permission
     require_once 'core/PermissionService.php';
-    PermissionService::requirePermission('admin.users.delete');
-
-    // Prevent deleting own account
-    if ($user_id == $_SESSION['user_id']) {
-        $error = "You cannot delete your own account.";
-    } else {
-        try {
-            $stmt = $conn->prepare("DELETE FROM users WHERE id = ? AND company_id = ?");
-            $stmt->execute(array($user_id, $_SESSION['company_id']));
-            $message = "User deleted successfully!";
-        } catch (PDOException $e) {
-            $error = "Error deleting user.";
+    // Use the new permission 'org_setup.user_mapping.remove' OR fallback to 'admin.users.delete'
+    if (PermissionService::hasPermission('org_setup.user_mapping.remove') || PermissionService::hasPermission('admin.users.delete')) {
+        if ($user_id == $_SESSION['user_id']) {
+            $error = "You cannot remove yourself from the organization.";
+        } else {
+            try {
+                // Remove from this organization only
+                $stmt = $conn->prepare("DELETE FROM organization_users WHERE user_id = ? AND company_id = ?");
+                $stmt->execute(array($user_id, $_SESSION['company_id']));
+                $message = "User removed from organization successfully!";
+            } catch (PDOException $e) {
+                $error = "Error removing user.";
+            }
         }
+    } else {
+        $error = "Permission Denied.";
     }
 }
 
@@ -39,7 +41,7 @@ if (isset($_GET['toggle'])) {
         $error = "You cannot deactivate your own account.";
     } else {
         try {
-            $stmt = $conn->prepare("UPDATE users SET is_active = NOT is_active WHERE id = ? AND company_id = ?");
+            $stmt = $conn->prepare("UPDATE organization_users SET is_active = NOT is_active WHERE user_id = ? AND company_id = ?");
             $stmt->execute(array($user_id, $_SESSION['company_id']));
             $message = "User status updated!";
         } catch (PDOException $e) {
@@ -48,8 +50,14 @@ if (isset($_GET['toggle'])) {
     }
 }
 
-// Fetch Users
-$stmt = $conn->prepare("SELECT u.*, r.role_name as role_name FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.company_id = ? ORDER BY u.created_at DESC");
+// Fetch Users for this Organization
+$stmt = $conn->prepare("SELECT u.id, u.username, u.email, u.full_name, u.created_at, 
+                               ou.role_id, ou.is_active, r.role_name, ou.id as org_user_id
+                        FROM users u 
+                        JOIN organization_users ou ON u.id = ou.user_id 
+                        LEFT JOIN roles r ON ou.role_id = r.id 
+                        WHERE ou.company_id = ? 
+                        ORDER BY u.created_at DESC");
 $stmt->execute(array($_SESSION['company_id']));
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -64,10 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         //    - If Role doesn't have it and User CHECKS it -> Grant (is_allowed = 1)
         //    - If matches Role -> No override entry needed (delete existing)
         
-        // Fetch users current role
+        // Fetch users current role for the active company
         $conn = $db->getConnection();
-        $stmt = $conn->prepare("SELECT role_id FROM users WHERE id = ?");
-        $stmt->execute([$targetId]);
+        $stmt = $conn->prepare("SELECT role_id FROM organization_users WHERE user_id = ? AND company_id = ?");
+        $stmt->execute([$targetId, $_SESSION['company_id']]);
         $roleId = $stmt->fetchColumn();
         
         $rolePerms = $permService->getRolePermissions($roleId); // array of perm IDs
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        if ($permService->saveUserOverrides($targetId, $overrides)) {
+        if ($permService->saveUserOverrides($targetId, $_SESSION['company_id'], $overrides)) {
             $message = "User permission overrides updated successfully!";
         } else {
             $error = "Failed to update user overrides.";
@@ -103,7 +103,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch Roles and Users for the Selector
 $conn = $db->getConnection();
 $roles = $conn->query("SELECT * FROM roles ORDER BY role_name")->fetchAll(PDO::FETCH_ASSOC);
-$users = $conn->query("SELECT id, username, full_name, role_id FROM users WHERE is_active = 1 ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch Users in this company with their role
+$userQuery = "SELECT u.id, u.username, u.full_name, ou.role_id 
+              FROM users u 
+              JOIN organization_users ou ON u.id = ou.user_id 
+              WHERE ou.company_id = ? AND ou.is_active = 1 
+              ORDER BY u.username";
+$stmtUser = $conn->prepare($userQuery);
+$stmtUser->execute([$_SESSION['company_id']]);
+$users = $stmtUser->fetchAll(PDO::FETCH_ASSOC);
 
 // Get the Permission Tree for rendering
 $permissionTree = $permService->getPermissionTree();
@@ -121,25 +130,28 @@ if ($selectedId) {
         // For User, we want to show Effective Permissions (Role + Overrides)
         // 1. Get Role Perms
         $uKey = array_search($selectedId, array_column($users, 'id'));
-        $uRoleId = $users[$uKey]['role_id'];
-        $basePerms = $permService->getRolePermissions($uRoleId);
-        
-        // 2. Get Overrides
-        $overrides = $permService->getUserOverrides($selectedId);
-        
-        // 3. Merge
-        // Start with base
-        $effMap = array_fill_keys($basePerms, true);
-        
-        // Apply overrides
-        foreach ($overrides as $pId => $isAllowed) {
-            if ($isAllowed) $effMap[$pId] = true;
-            else unset($effMap[$pId]);
+        if ($uKey !== false) {
+             $uRoleId = $users[$uKey]['role_id'];
+             $basePerms = $permService->getRolePermissions($uRoleId);
+             
+             // 2. Get Overrides
+             $overrides = $permService->getUserOverrides($selectedId, $_SESSION['company_id']);
+             
+             // 3. Merge
+             // Start with base
+             $effMap = array_fill_keys($basePerms, true);
+             
+             // Apply overrides
+             foreach ($overrides as $pId => $isAllowed) {
+                 if ($isAllowed) $effMap[$pId] = true;
+                 else unset($effMap[$pId]);
+             }
+             
+             $currentPermissions = array_keys($effMap);
         }
-        
-        $currentPermissions = array_keys($effMap);
     }
 }
+
 
 require_once 'templates/header.php';
 ?>

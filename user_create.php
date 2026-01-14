@@ -32,33 +32,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     } elseif (strlen($password) < 6) {
         $error = "Password must be at least 6 characters.";
     } else {
-        // Check if username or email exists
-        $stmt = $conn->prepare("SELECT id FROM users WHERE (username = ? OR email = ?) AND company_id = ?");
-        $stmt->execute(array($username, $email, $_SESSION['company_id']));
+        // Check if username or email exists globally
+        $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+        $stmt->execute(array($username, $email));
+        $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($stmt->fetch()) {
-            $error = "Username or email already exists.";
-        } else {
-            try {
+        $userId = null;
+
+        try {
+            $conn->beginTransaction();
+
+            if ($existingUser) {
+                // User exists. Check if they are already in this company
+                $userId = $existingUser['id'];
+
+                $stmtCheckOrg = $conn->prepare("SELECT id FROM organization_users WHERE user_id = ? AND company_id = ?");
+                $stmtCheckOrg->execute([$userId, $_SESSION['company_id']]);
+
+                if ($stmtCheckOrg->fetch()) {
+                    throw new Exception("User already exists in this organization.");
+                }
+
+                // If not in this org, we will just map them (ignoring password/email update for now)
+                // Optionally update full name or phone if provided? Let's keep it simple.
+            } else {
+                // New User
                 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-
-                $stmt = $conn->prepare("INSERT INTO users (company_id, username, email, password_hash, role_id, store_id, terminal_id, phone, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+                // Schema: users (id, username, password_hash, full_name, email, phone, created_at)
+                // removed company_id, role_id, store_id, terminal_id, is_active (moved to org_users)
+                $stmt = $conn->prepare("INSERT INTO users (username, email, password_hash, phone, created_at) VALUES (?, ?, ?, ?, NOW())");
                 $stmt->execute(array(
-                    $_SESSION['company_id'],
                     $username,
                     $email,
                     $hashedPassword,
-                    $role_id,
-                    $store_id,
-                    $terminal_id,
-                    $phone,
-                    $is_active
+                    $phone
                 ));
-
-                $message = "User created successfully!";
-            } catch (PDOException $e) {
-                $error = "Error creating user: " . $e->getMessage();
+                $userId = $conn->lastInsertId();
             }
+
+            // Map to Organization
+            // organization_users (user_id, company_id, role_id, store_id, terminal_id, is_active)
+            $stmtOrg = $conn->prepare("INSERT INTO organization_users (user_id, company_id, role_id, store_id, terminal_id, is_active) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmtOrg->execute(array(
+                $userId,
+                $_SESSION['company_id'],
+                $role_id,
+                $store_id,
+                $terminal_id,
+                $is_active
+            ));
+
+            $conn->commit();
+            $message = "User created/added successfully!";
+
+        } catch (Exception $e) {
+            $conn->rollBack();
+            $error = "Error creating user: " . $e->getMessage();
         }
     }
 }
