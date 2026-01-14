@@ -11,11 +11,11 @@ if ($database_url) {
     define('DB_PASS', $db_parts['pass'] ?? '');
     define('DB_PORT', $db_parts['port'] ?? 3306);
 } else {
-    define('DB_HOST', 'sql303.infinityfree.com');
-    define('DB_NAME', 'if0_40902327_retail_pos');
-    define('DB_USER', 'if0_40902327');
-    define('DB_PASS', 'swtechnologypos');
-    define('DB_PORT', 3306);
+    define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+    define('DB_NAME', getenv('DB_NAME') ?: 'retail_pos_db');
+    define('DB_USER', getenv('DB_USER') ?: 'root');
+    define('DB_PASS', getenv('DB_PASS') ?: ''); // Default XAMPP password is empty
+    define('DB_PORT', getenv('DB_PORT') ?: 3306);
 }
 
 define('APP_NAME', 'Waqas Retail POS');
