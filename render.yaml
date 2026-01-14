@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: retail-pos
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_ENV
+        value: production
